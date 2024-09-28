@@ -560,6 +560,4 @@ def main():
 
 
 if __name__ == "__main__":
-    import webserver
-    webserver.keep_alive()
     main()
