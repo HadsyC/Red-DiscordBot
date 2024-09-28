@@ -33,9 +33,10 @@ class QueueUtilities(MixinMeta, metaclass=CompositeMetaClass):
         repeat = await self.config.guild(ctx.guild).repeat()
         autoplay = await self.config.guild(ctx.guild).auto_play()
 
-        queue_num_pages = math.ceil(len(queue) / 10)
-        queue_idx_start = (page_num - 1) * 10
-        queue_idx_end = queue_idx_start + 10
+        page_size = 25
+        queue_num_pages = math.ceil(len(queue) / page_size)
+        queue_idx_start = (page_num - 1) * page_size
+        queue_idx_end = queue_idx_start + page_size
         if len(player.queue) > 500:
             queue_list = _("__Too many songs in the queue, only showing the first 500__.\n\n")
         else:
@@ -69,11 +70,12 @@ class QueueUtilities(MixinMeta, metaclass=CompositeMetaClass):
         ):
             req_user = track.requester
             track_idx = i + 1
-            track_description = await self.get_track_description(
-                track, self.local_folder_current_path, shorten=True
+            track_description = await self.get_track_description_unformatted(
+                track, self.local_folder_current_path
             )
-            queue_list += f"`{track_idx}.` {track_description}, "
-            queue_list += _("requested by **{user}**\n").format(user=req_user)
+            dur = self.format_time(track.length)
+            queue_list += f"**`{track_idx:>2}. {track_description} {dur}`**\n"
+            # queue_list += _("requested by **{user}**\n").format(user=req_user)
 
         embed = discord.Embed(
             colour=await ctx.embed_colour(),

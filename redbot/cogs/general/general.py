@@ -17,14 +17,15 @@ from redbot.core.utils.chat_formatting import (
     humanize_number,
     humanize_timedelta,
 )
+from discord.ext.commands import Context
 
 _ = T_ = Translator("General", __file__)
 
 
 class RPS(Enum):
-    rock = "\N{MOYAI}"
-    paper = "\N{PAGE FACING UP}"
-    scissors = "\N{BLACK SCISSORS}\N{VARIATION SELECTOR-16}"
+    rock = "🪨"
+    paper = "📄"
+    scissors = "✂️"
 
 
 class RPSParser:
@@ -42,6 +43,28 @@ class RPSParser:
 
 MAX_ROLL: Final[int] = 2**63 - 1
 
+class RPS_view(discord.ui.View):
+    def __init__(self):
+        super().__init__()
+        self.selection = None
+    
+    @discord.ui.button(label="🪨")
+    async def rock(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.selection = RPS.rock
+        self.stop()
+        await interaction.message.delete()
+
+    @discord.ui.button(label="📄")
+    async def paper(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.selection = RPS.paper
+        self.stop()
+        await interaction.message.delete()
+    
+    @discord.ui.button(label="✂️")
+    async def scissors(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.selection = RPS.scissors
+        self.stop()
+        await interaction.message.delete()
 
 @cog_i18n(_)
 class General(commands.Cog):
@@ -81,6 +104,15 @@ class General(commands.Cog):
     async def red_delete_data_for_user(self, **kwargs):
         """Nothing to delete"""
         return
+    @commands.command()
+    async def remind(self, ctx, user:discord.Member, minutes:int):
+        """Remind a user after a certain amount of time"""
+        from datetime import datetime, timedelta
+        now = datetime.now()
+        remind_time = now + timedelta(minutes=minutes)
+        unix_time = remind_time.timestamp()
+        unix_time = int(unix_time)
+        await ctx.send(f"{user.mention} PROMISED to be online <t:{unix_time}:R>.")
 
     @commands.command(usage="<first> <second> [others...]")
     async def choose(self, ctx, *choices):
@@ -146,17 +178,20 @@ class General(commands.Cog):
             await ctx.send(_("*flips a coin and... ") + choice([_("HEADS!*"), _("TAILS!*")]))
 
     @commands.command()
-    async def rps(self, ctx, your_choice: RPSParser):
+    async def rps(self, ctx: Context):
         """Play Rock Paper Scissors."""
         author = ctx.author
-        player_choice = your_choice.choice
-        if not player_choice:
-            return await ctx.send(
-                _("This isn't a valid option. Try {r}, {p}, or {s}.").format(
-                    r="rock", p="paper", s="scissors"
-                )
-            )
+        view = RPS_view()
+        await ctx.send("Choose your weapon!", view=view)
+        await view.wait()
+
+        player_choice = view.selection
+        if player_choice is None:
+            await ctx.send("You didn't choose a weapon in time!")
+            return
         red_choice = choice((RPS.rock, RPS.paper, RPS.scissors))
+        await ctx.send(f"You chose {player_choice.value}, I choose {red_choice.value}!")
+        
         cond = {
             (RPS.rock, RPS.paper): False,
             (RPS.rock, RPS.scissors): True,
@@ -173,19 +208,19 @@ class General(commands.Cog):
 
         if outcome is True:
             await ctx.send(
-                _("{choice} You win {author.mention}!").format(
+                _("You win {author.mention}!").format(
                     choice=red_choice.value, author=author
                 )
             )
         elif outcome is False:
             await ctx.send(
-                _("{choice} You lose {author.mention}!").format(
+                _("You lose {author.mention}!").format(
                     choice=red_choice.value, author=author
                 )
             )
         else:
             await ctx.send(
-                _("{choice} We're square {author.mention}!").format(
+                _("We're square {author.mention}!").format(
                     choice=red_choice.value, author=author
                 )
             )

@@ -319,11 +319,14 @@ class FormattingUtilities(MixinMeta, metaclass=CompositeMetaClass):
                     string = f'**{escape(f"{string}", formatting=True)}**'
             else:
                 if track.is_stream:
-                    icy = await self.icyparser(track.uri)
-                    if icy:
-                        title = icy
+                    if radio_name := track.extras.get("radio_name", None):
+                        title = f"[RADIO] {radio_name}"
                     else:
-                        title = f"{track.title} - {track.author}"
+                        icy = await self.icyparser(track.uri)
+                        if icy:
+                            title = icy
+                        else:
+                            title = f"{track.title} - {track.author}"
                 elif track.author.lower() not in track.title.lower():
                     title = f"{track.title} - {track.author}"
                 else:
@@ -360,16 +363,21 @@ class FormattingUtilities(MixinMeta, metaclass=CompositeMetaClass):
                     return query.to_string_user()
             else:
                 if track.is_stream:
-                    icy = await self.icyparser(track.uri)
-                    if icy:
-                        title = icy
+                    if radio_name:=track.extras.get("radio_name",None):
+                        title = f"[RADIO] {radio_name}"
                     else:
-                        title = f"{track.title} - {track.author}"
+                        icy = await self.icyparser(track.uri)
+                        if icy:
+                            title = icy
+                        else:
+                            title = f"{track.title} - {track.author}"
                 elif track.author.lower() not in track.title.lower():
                     title = f"{track.title} - {track.author}"
                 else:
                     title = track.title
-                return f"{title}"
+                title_size = 57
+                shortened_title = title[:title_size-3]+"..." if len(title) > title_size else title
+                return f"{shortened_title:{title_size}}"
         elif hasattr(track, "to_string_user") and track.is_local:
             return track.to_string_user() + " "
         return None

@@ -523,7 +523,7 @@ class AudioAPIInterface:
                 if val is None and not skip_youtube_api:
                     try:
                         val = await self.fetch_youtube_query(
-                            ctx, track_info, current_cache_level=current_cache_level
+                            ctx, track_info, current_cache_level=current_cache_level, player=player
                         )
                     except YouTubeApiError as exc:
                         val = None
@@ -712,9 +712,13 @@ class AudioAPIInterface:
         ctx: commands.Context,
         track_info: str,
         current_cache_level: CacheLevel = CacheLevel.all(),
+        player: lavalink.Player = None,
     ) -> Optional[str]:
         """Call the Youtube API and returns the youtube URL that the query matched."""
-        track_url = await self.youtube_api.get_call(track_info)
+        # track_url = await self.youtube_api.get_call(track_info)
+        print(f"fetch_youtube_query: {track_info}")
+        track = await self.fetch_track(ctx, player, track_info, forced=True)
+        track_url = track[0].tracks[0].uri
         if CacheLevel.set_youtube().is_subset(current_cache_level) and track_url:
             time_now = int(datetime.datetime.now(datetime.timezone.utc).timestamp())
             task = (

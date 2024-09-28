@@ -35,7 +35,7 @@ class PlayerCommands(MixinMeta, metaclass=CompositeMetaClass):
     @commands.command(name="play")
     @commands.guild_only()
     @commands.bot_has_permissions(embed_links=True)
-    async def command_play(self, ctx: commands.Context, *, query: str):
+    async def command_play(self, ctx: commands.Context, *, query: str, radio_name: str = None):
         """Play the specified track or search for a close match.
 
         To play a local track, the query should be `<parentfolder>\\<filename>`.
@@ -46,7 +46,7 @@ class PlayerCommands(MixinMeta, metaclass=CompositeMetaClass):
         restrict = await self.config.restrict()
         if restrict and self.match_url(str(query)):
             valid_url = self.is_url_allowed(str(query))
-            if not valid_url:
+            if not valid_url and not radio_name:
                 return await self.send_embed_msg(
                     ctx,
                     title=_("Unable To Play Tracks"),
@@ -127,7 +127,7 @@ class PlayerCommands(MixinMeta, metaclass=CompositeMetaClass):
         if query.is_spotify:
             return await self._get_spotify_tracks(ctx, query)
         try:
-            await self._enqueue_tracks(ctx, query)
+            await self._enqueue_tracks(ctx, query, radio_name=radio_name)
         except QueryUnauthorized as exc:
             return await self.send_embed_msg(
                 ctx, title=_("Unable To Play Tracks"), description=exc.message
@@ -140,7 +140,7 @@ class PlayerCommands(MixinMeta, metaclass=CompositeMetaClass):
     @commands.guild_only()
     @commands.bot_has_permissions(embed_links=True)
     async def command_bumpplay(
-        self, ctx: commands.Context, play_now: UserInputOptional[bool] = False, *, query: str
+        self, ctx: commands.Context, play_now: UserInputOptional[bool] = False, *, query: str,radio_name: str = None
     ):
         """Force play a URL or search for a track."""
         query = Query.process_input(query, self.local_folder_current_path)
@@ -154,7 +154,7 @@ class PlayerCommands(MixinMeta, metaclass=CompositeMetaClass):
         restrict = await self.config.restrict()
         if restrict and self.match_url(str(query)):
             valid_url = self.is_url_allowed(str(query))
-            if not valid_url:
+            if not valid_url and not radio_name:
                 return await self.send_embed_msg(
                     ctx,
                     title=_("Unable To Play Tracks"),
@@ -236,7 +236,7 @@ class PlayerCommands(MixinMeta, metaclass=CompositeMetaClass):
             if query.is_spotify:
                 tracks = await self._get_spotify_tracks(ctx, query)
             else:
-                tracks = await self._enqueue_tracks(ctx, query, enqueue=False)
+                tracks = await self._enqueue_tracks(ctx, query, enqueue=False, radio_name=radio_name)
         except QueryUnauthorized as exc:
             return await self.send_embed_msg(
                 ctx, title=_("Unable To Play Tracks"), description=exc.message
@@ -301,6 +301,7 @@ class PlayerCommands(MixinMeta, metaclass=CompositeMetaClass):
                         "enqueue_time": int(time.time()),
                         "vc": player.channel.id,
                         "requester": ctx.author.id,
+                        "radio_name": radio_name,
                     }
                 )
                 player.queue.insert(0, single_track)
@@ -324,6 +325,7 @@ class PlayerCommands(MixinMeta, metaclass=CompositeMetaClass):
                     "enqueue_time": int(time.time()),
                     "vc": player.channel.id,
                     "requester": ctx.author.id,
+                    "radio_name": radio_name,
                 }
             )
             player.queue.insert(0, single_track)

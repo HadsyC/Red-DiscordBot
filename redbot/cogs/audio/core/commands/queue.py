@@ -165,7 +165,8 @@ class QueueCommands(MixinMeta, metaclass=CompositeMetaClass):
 
         async with ctx.typing():
             limited_queue = player.queue[:500]  # TODO: Improve when Toby menu's are merged
-            len_queue_pages = math.ceil(len(limited_queue) / 10)
+            page_size = 25
+            len_queue_pages = math.ceil(len(limited_queue) / page_size)
             queue_page_list = []
             async for page_num in AsyncIter(range(1, len_queue_pages + 1)):
                 embed = await self._build_queue_page(ctx, limited_queue, player, page_num)

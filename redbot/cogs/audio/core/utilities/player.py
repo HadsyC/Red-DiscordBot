@@ -353,7 +353,7 @@ class PlayerUtilities(MixinMeta, metaclass=CompositeMetaClass):
             )
 
     async def _enqueue_tracks(
-        self, ctx: commands.Context, query: Union[Query, list], enqueue: bool = True
+        self, ctx: commands.Context, query: Union[Query, list], enqueue: bool = True, radio_name: str = None
     ) -> Union[discord.Message, List[lavalink.Track], lavalink.Track]:
         player = lavalink.get_player(ctx.guild.id)
         try:
@@ -576,6 +576,7 @@ class PlayerUtilities(MixinMeta, metaclass=CompositeMetaClass):
                             "enqueue_time": int(time.time()),
                             "vc": player.channel.id,
                             "requester": ctx.author.id,
+                            "radio_name": radio_name,
                         }
                     )
                     player.add(ctx.author, single_track)

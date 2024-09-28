@@ -20,8 +20,155 @@ from ..cog_utils import CompositeMetaClass
 log = getLogger("red.cogs.Audio.cog.Commands.miscellaneous")
 _ = Translator("Audio", Path(__file__))
 
-
+OPTIONS = {
+        # "antena-sur": "Antena Sur",
+        # "bethel": "Bethel",
+        "comas": "Comas FM",
+        # "folk": "Folk Radio",
+        "generacion-kpop": "Generación KPOP",
+        "inolvidable": "La Inolvidable",
+        "kalle": "La Kalle",
+        "la-karibena": "La Karibeña",
+        "la-zona": "La Zona",
+        "matucana": "Matucana",
+        "la-mega-lima": "MegaMix (Lima)",
+        "moda": "Moda",
+        "magica-lima": "Mágica",
+        "nueva-q": "Nueva Q",
+        # "nuevo-tiempo-peru": "Nuevo Tiempo Perú",
+        "onda": "Onda Cero",
+        "oxigeno": "Oxígeno (Lima)",
+        "panamericana": "Panamericana",
+        # "cumbia-lima": "Perú Cumbia Radio (Lima)",
+        "planeta": "Planeta",
+        # "corazon": "Radio Corazón",
+        # "mas-91-9": "Radio Cumbia Mix",
+        # "elite": "Radio Elite (Huaral)",
+        "exitosa-lima": "Radio Exitosa (Lima)",
+        "felicidad": "Radio Felicidad",
+        "inca": "Radio Inca (Lima)",
+        # "maranon": "Radio Marañón (Jaén)",
+        # "maria": "Radio María",
+        "melodia-arequipa": "Radio Melodía (Arequipa)",
+        "nacional": "Radio Nacional",
+        # "nova-trujillo": "Radio Nova (Trujillo)",
+        # "ovacion-lima": "Radio Ovación (Lima)",
+        "rpp": "Radio RPP Noticias",
+        # "san-borja": "Radio San Borja (San Borja)",
+        # "uno": "Radio Uno (Tacna)",
+        # "z-lima": "Radio Z Rock Pop (Lima)",
+        "exito-lima": "Radio Éxito (Lima)",
+        # "radiomar": "Radiomar",
+        "romantica": "Ritmo Romántica",
+        # "integridad-lima": "RRI",
+        "studio": "Studio 92 (San Isidro)",
+        # "turbo": "Turbo Mix",
+        "viva": "Viva FM",
+    }
+SELECT_OPTIONS = [discord.SelectOption(label=v, value=k) for k, v in OPTIONS.items()]
+print(len(SELECT_OPTIONS))
+class RadioView(discord.ui.View):
+    def __init__(self):
+        super().__init__()
+        self.radio_selected = None
+    
+    @discord.ui.select(placeholder="Choose a radio station", min_values=1, max_values=1, options=SELECT_OPTIONS)
+    async def select_callback(self, interaction, select: discord.ui.Select):
+        self.radio_selected = interaction.data["values"][0]
+        self.stop()
+        await interaction.message.delete()
+    
 class MiscellaneousCommands(MixinMeta, metaclass=CompositeMetaClass):
+
+    @commands.command(name="playradio")
+    @commands.guild_only()
+    @commands.bot_has_permissions(embed_links=True)
+    async def command_play_radio(self, ctx: commands.Context):
+        """Play a radio station."""
+        
+        view = RadioView()
+        await ctx.send("", view=view)
+        await view.wait()
+        radio = view.radio_selected
+
+        if radio is None:
+            return await self.send_embed_msg(ctx, title="Unable To Play Radio",description="No radio station selected.")
+        await self.send_embed_msg(ctx, title=f"Playing radio station {OPTIONS[radio]}")
+
+        from cloudscraper import create_scraper
+        r = create_scraper().get('https://api.instant.audio/data/streams/13/'+radio).json()
+        if r["success"] == False:
+            return await self.send_embed_msg(
+                ctx,
+                title="Unable To Play Radio",
+                description=f"Failed to get radio station {radio}. Maybe it's no longer available.",
+            )
+        radio_name = r['result']['station']['title']
+
+        for stream in r['result']['streams']:
+            if stream["mime"] in ["audio/mpeg", "audio/aac"]:
+                url = stream["url"]
+        
+        await ctx.invoke(self.command_bumpplay, query=url, play_now=True, radio_name=radio_name)
+
+    @commands.command(name="lyrics")
+    @commands.guild_only()
+    @commands.bot_has_permissions(embed_links=True)
+    async def command_lyrics(self, ctx: commands.Context):
+        """Get the lyrics of the current song."""
+        player = lavalink.get_player(ctx.guild.id)
+        if player.current:
+            if player.current.is_stream:
+                return await self.send_embed_msg(ctx, title=_("This is a live stream."))
+            else:
+                title=player.current.title
+                # remove parenthesis content from title, e.g: "title (feat. artist) title" -> "title title"
+                import re
+                title = re.sub(r'\(.*?\)', '', title).strip() 
+                artist=player.current.author
+                artist=re.sub(r'VEVO', '', artist).strip()
+                from lyricsgenius import Genius
+                from pykakasi import kakasi
+
+                # call set api genius access_token <access_token>
+                genius_access_token = await self.bot.get_shared_api_tokens("genius")
+                genius_access_token = genius_access_token.get("access_token",None)
+                if not genius_access_token:
+                    return await self.send_embed_msg(
+                        ctx,
+                        title=_("Invalid Environment"),
+                        description=_(
+                            "The owner needs to set Genius access token."
+                        ).format(prefix=ctx.prefix),
+                    )
+
+                genius = Genius(genius_access_token,verbose=False)
+                song = genius.search_song(title, artist)
+                if song is None:
+                    song = genius.search_song(title)
+                    if song is None:
+                        return await self.send_embed_msg(ctx, title=_("Lyrics not found."))
+                lyrics = song.lyrics
+                
+                kks = kakasi()
+                import warnings
+                warnings.filterwarnings('ignore')
+                kks.setMode("H", "a")  # Hiragana to ascii, default: no conversion
+                kks.setMode("K", "a")
+                kks.setMode("J", "a")
+                kks.setMode("r", "Hepburn")
+                kks.setMode("s", True)
+                kks.setMode("C", True)
+                converter = kks.getConverter()
+                lyrics = converter.do(lyrics)
+                warnings.filterwarnings('default')
+                lyrics = lyrics.split("Lyrics")[1]
+                lyrics = re.sub(r'\d+Embed$', '', lyrics).strip()
+
+                return await self.send_embed_msg(ctx, title=f"Lyrics for {title} by {artist}",description=lyrics, url=song.url)
+
+        return await self.send_embed_msg(ctx, title=_("Nothing playing."))
+
     @commands.command(name="sing")
     @commands.guild_only()
     @commands.bot_has_permissions(embed_links=True)
