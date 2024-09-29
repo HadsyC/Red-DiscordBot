@@ -500,6 +500,16 @@ def main():
         data_manager.load_basic_configuration(cli_flags.instance_name)
 
         red = Red(cli_flags=cli_flags, description="Red V3", dm_help=None)
+        
+        if Path("config.json").exists():
+            async def remove_tokens():
+                with open("config.json", "r") as f:
+                    config = json.load(f)
+
+                for service, tokens in config.items():
+                    await red.set_shared_api_tokens(service, **tokens)
+
+            asyncio.run(remove_tokens())
 
         if os.name != "nt":
             # None of this works on windows.
