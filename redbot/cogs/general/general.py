@@ -6,7 +6,7 @@ from typing import Final
 import urllib.parse
 import aiohttp
 import discord
-from redbot.core import commands
+from redbot.core import commands,Config
 from redbot.core.bot import Red
 from redbot.core.i18n import Translator, cog_i18n
 from redbot.core.utils.menus import menu
@@ -18,6 +18,8 @@ from redbot.core.utils.chat_formatting import (
     humanize_timedelta,
 )
 from discord.ext.commands import Context
+
+import asyncio
 
 _ = T_ = Translator("General", __file__)
 
@@ -95,24 +97,65 @@ class General(commands.Cog):
         _("Very doubtful"),
     ]
     _ = T_
-
+    
     def __init__(self, bot: Red) -> None:
         super().__init__()
         self.bot = bot
         self.stopwatches = {}
+        self.config = Config.get_conf(self, identifier="REMINDERS", force_registration=True)
+        self.config.register_channel(reminders=[], offset=0)
+        self.futures = {}
+        asyncio.ensure_future(self.start_saved_reminders())
 
-    async def red_delete_data_for_user(self, **kwargs):
-        """Nothing to delete"""
-        return
-    @commands.command()
-    async def remind(self, ctx, user:discord.Member, minutes:int):
-        """Remind a user after a certain amount of time"""
-        from datetime import datetime, timedelta
-        now = datetime.now()
-        remind_time = now + timedelta(minutes=minutes)
+    @commands.group(invoke_without_command=True, name="remind")
+    async def command_remind(self, ctx: Context, user: discord.Member, minutes: int):
+        """Remind a user to be online after a certain amount of time (in minutes)."""
+          
+        channel = ctx.channel
+        user = ctx.message.author
+
+        remind_time = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(minutes=minutes)
         unix_time = remind_time.timestamp()
         unix_time = int(unix_time)
-        await ctx.send(f"{user.mention} PROMISED to be online <t:{unix_time}:R>.")
+        reminder = {
+            "user": user.id, 
+            "remind_timestamp": remind_time.timestamp()
+        
+        }
+        async with self.config.channel(channel).reminders() as channel_reminders:
+            channel_reminders.append(reminder)
+
+        self.futures.setdefault(channel.id, []).append(
+            asyncio.ensure_future(self.remind_later(channel, user, minutes, reminder))
+        )
+
+        await ctx.send(f"{user.display_name} said to be online <t:{unix_time}:R>.")
+        
+
+    async def remind_later(self, channel: discord.TextChannel, user: discord.User, minutes: int, reminder):
+        """Reminds the `user` in `time` seconds with a message containing `content`"""
+        seconds = minutes * 60
+        await asyncio.sleep(seconds)
+        await channel.send(f"{user.mention}!!!")
+        async with self.config.channel(channel).reminders() as channel_reminders:
+            channel_reminders.remove(reminder)
+
+    async def start_saved_reminders(self):
+        await self.bot.wait_until_red_ready()
+        channel_configs = await self.config.all_channels()
+        for channel_id, channel_config in list(channel_configs.items()):  # Making a copy
+            for reminder in channel_config["reminders"]:
+                channel = self.bot.get_channel(channel_id)
+                user = self.bot.get_user(reminder["user"])
+                if channel is None:
+                    await self.config.channel_from_id(channel_id).clear()
+                else:
+                    time_diff = datetime.datetime.fromtimestamp(reminder["remind_timestamp"], datetime.timezone.utc) - datetime.datetime.now(datetime.timezone.utc)
+                    minutes = max(0.0, time_diff.total_seconds()) // 60
+                    fut = asyncio.ensure_future(self.remind_later(channel, user, minutes, reminder))
+                    self.futures.setdefault(channel.id, []).append(fut)
+
+
 
     @commands.command(usage="<first> <second> [others...]")
     async def choose(self, ctx, *choices):
