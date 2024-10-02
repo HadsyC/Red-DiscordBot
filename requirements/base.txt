@@ -92,3 +92,4 @@ zipp==3.20.1; python_version != "3.10" and python_version != "3.11"
 # These are mine
 lyricsgenius==3.0.1
 pykakasi==2.3.0
+cloudscraper==1.2.71
